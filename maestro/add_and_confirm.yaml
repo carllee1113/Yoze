@@ -1,0 +1,42 @@
+appId: com.yoze.yoze
+---
+# Clear app state and launch
+- clearState
+- launchApp
+
+# Wait for app to fully initialize (database + notifications)
+- waitForAnimationToEnd
+
+# Verify empty state
+- assertVisible: "YOZE 藥師"
+- assertVisible: "還沒有添加藥物"
+
+# Tap add FAB (bottom-right)
+- tapOn:
+    point: "88%,92%"
+
+# Wait for add medication screen
+- assertVisible: "添加藥物"
+
+# Enter medication name
+- tapOn: "例如：二甲雙胍"
+- inputText: "PARACETAMOL"
+- hideKeyboard
+
+# Select 3rd color (blue)
+- tapOn:
+    text: "蓝"
+    index: 0
+
+# Scroll down to save button and tap
+- scrollUntilVisible:
+    element:
+      text: "儲存"
+    direction: DOWN
+- tapOn: "儲存"
+
+# Wait for save to complete
+- waitForAnimationToEnd
+
+# Verify returned to home
+- assertVisible: "YOZE 藥師"
