@@ -22,11 +22,20 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   bool _saving = false;
   String _selectedForm = '藥丸';
   String _selectedAdministration = '飯後';
-  String _selectedDosePerTime = '4';
+  String _selectedDosePerTime = '1';
 
   static const List<String> _formOptions = ['藥丸', '膠囊', '藥水', '膏藥'];
   static const List<String> _administrationOptions = ['飯前', '飯後', '空肚食', '飽肚食'];
-  static const List<String> _dosePerTimeOptions = ['1', '2', '3', '4'];
+  static const List<String> _dosePerTimeOptions = [
+    '0.5',
+    '1',
+    '1.5',
+    '2',
+    '2.5',
+    '3',
+    '3.5',
+    '4',
+  ];
 
   @override
   void dispose() {
@@ -39,9 +48,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('添加藥物'),
-      ),
+      appBar: AppBar(title: const Text('添加藥物')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(
@@ -250,13 +257,20 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: RainbowColors.colors[i].withValues(alpha: isSelected ? 1.0 : 0.4),
+              color: RainbowColors.colors[i].withValues(
+                alpha: isSelected ? 1.0 : 0.4,
+              ),
               shape: BoxShape.circle,
               border: isSelected
                   ? Border.all(color: Colors.black87, width: 3)
                   : null,
               boxShadow: isSelected
-                  ? [BoxShadow(color: RainbowColors.colors[i].withValues(alpha: 0.4), blurRadius: 8)]
+                  ? [
+                      BoxShadow(
+                        color: RainbowColors.colors[i].withValues(alpha: 0.4),
+                        blurRadius: 8,
+                      ),
+                    ]
                   : null,
             ),
             child: Center(
@@ -279,9 +293,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(fontSize: 18, color: Colors.grey),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
@@ -300,6 +312,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         dosePerTime: _selectedDosePerTime,
         dosage: _selectedDosePerTime,
         notes: _notesController.text.trim(),
+        medicineCode: await DatabaseHelper.getNextMedicineCode(),
         colorIndex: _selectedColorIndex,
         hour: _selectedTime.hour,
         minute: _selectedTime.minute,
@@ -320,9 +333,9 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失敗: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('保存失敗: $e')));
       }
     } finally {
       if (mounted) {

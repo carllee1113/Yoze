@@ -21,7 +21,9 @@ class NotificationService {
     tz_data.initializeTimeZones();
     await _configureLocalTimeZone();
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -29,14 +31,11 @@ class NotificationService {
     );
 
     await _plugin.initialize(
-      const InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      ),
+      const InitializationSettings(android: androidSettings, iOS: iosSettings),
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    await _tts.setLanguage('zh-TW');
+    await _configureCantoneseVoice();
     await _tts.setSpeechRate(0.5);
     await _tts.setVolume(1.0);
 
@@ -51,7 +50,8 @@ class NotificationService {
     );
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(androidChannel);
 
     _initialized = true;
@@ -110,7 +110,11 @@ class NotificationService {
       fullScreenIntent: true,
       category: AndroidNotificationCategory.alarm,
       actions: <AndroidNotificationAction>[
-        const AndroidNotificationAction('confirm', '已吃', showsUserInterface: true),
+        const AndroidNotificationAction(
+          'confirm',
+          '已吃',
+          showsUserInterface: true,
+        ),
         const AndroidNotificationAction('snooze', '稍後提醒'),
       ],
     );
@@ -142,6 +146,45 @@ class NotificationService {
       tz.setLocalLocation(tz.getLocation(timeZoneName));
     } catch (_) {
       // Keep timezone's default local location as fallback.
+    }
+  }
+
+  static Future<void> _configureCantoneseVoice() async {
+    const fallbackLanguages = ['zh-HK', 'yue-HK', 'zh-TW', 'zh-CN'];
+    try {
+      final voices = await _tts.getVoices;
+      if (voices is List) {
+        for (final voice in voices) {
+          if (voice is! Map) continue;
+          final locale = '${voice['locale'] ?? voice['language'] ?? ''}';
+          final name = '${voice['name'] ?? ''}';
+          final isCantonese =
+              locale.toLowerCase().contains('zh-hk') ||
+              locale.toLowerCase().contains('yue') ||
+              name.toLowerCase().contains('cantonese') ||
+              name.contains('廣東') ||
+              name.contains('香港');
+          if (!isCantonese) continue;
+
+          await _tts.setVoice(
+            Map<String, String>.from(
+              voice.map((key, value) => MapEntry('$key', '$value')),
+            ),
+          );
+          return;
+        }
+      }
+    } catch (_) {
+      // Fall through to language fallback below.
+    }
+
+    for (final language in fallbackLanguages) {
+      try {
+        await _tts.setLanguage(language);
+        return;
+      } catch (_) {
+        // Try the next available language.
+      }
     }
   }
 
@@ -194,6 +237,7 @@ class NotificationService {
 
   static Future<void> speak(String text) async {
     try {
+      await _configureCantoneseVoice();
       await _tts.setSpeechRate(0.5);
       await _tts.speak(text);
     } catch (_) {

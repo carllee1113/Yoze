@@ -2,21 +2,24 @@ import 'dart:convert';
 
 class Medication {
   final int? id;
-  final String name;           // 藥名: PARACETAMOL
-  final String form;          // 形式: TABLET
-  final String dosagePerUnit;  // 每粒成份: 500MG
+  final String name; // 藥名: PARACETAMOL
+  final String form; // 形式: TABLET
+  final String dosagePerUnit; // 每粒成份: 500MG
   final String administration; // 服用形式: 口服
-  final String dosePerTime;    // 每次份量: 每次兩粒
-  final int? durationDays;     // 持續時間: 14 (days)
-  final int? totalQuantity;    // 總數: 112
-  final String? permitNo;      // HK-XXXXX
-  final String dosage;         // 劑量 (保留向後兼容)
+  final String dosePerTime; // 每次份量: 每次兩粒
+  final int? durationDays; // 持續時間: 14 (days)
+  final int? totalQuantity; // 總數: 112
+  final String? permitNo; // HK-XXXXX
+  final String dosage; // 劑量 (保留向後兼容)
   final String notes;
+  final int medicineCode;
   final int colorIndex;
   final int hour;
   final int minute;
   final bool isEnabled;
+  final bool isArchived;
   final DateTime createdAt;
+  final DateTime? archivedAt;
 
   final String? sourcePhotoPath;
 
@@ -32,11 +35,14 @@ class Medication {
     this.permitNo,
     this.dosage = '',
     this.notes = '',
+    this.medicineCode = 0,
     required this.colorIndex,
     required this.hour,
     required this.minute,
     this.isEnabled = true,
+    this.isArchived = false,
     DateTime? createdAt,
+    this.archivedAt,
     this.sourcePhotoPath,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -52,12 +58,17 @@ class Medication {
     String? permitNo,
     String? dosage,
     String? notes,
+    int? medicineCode,
     int? colorIndex,
     int? hour,
     int? minute,
     bool? isEnabled,
+    bool? isArchived,
     DateTime? createdAt,
+    DateTime? archivedAt,
     String? sourcePhotoPath,
+    bool clearArchivedAt = false,
+    bool clearSourcePhotoPath = false,
   }) {
     return Medication(
       id: id ?? this.id,
@@ -71,12 +82,17 @@ class Medication {
       permitNo: permitNo ?? this.permitNo,
       dosage: dosage ?? this.dosage,
       notes: notes ?? this.notes,
+      medicineCode: medicineCode ?? this.medicineCode,
       colorIndex: colorIndex ?? this.colorIndex,
       hour: hour ?? this.hour,
       minute: minute ?? this.minute,
       isEnabled: isEnabled ?? this.isEnabled,
+      isArchived: isArchived ?? this.isArchived,
       createdAt: createdAt ?? this.createdAt,
-      sourcePhotoPath: sourcePhotoPath ?? this.sourcePhotoPath,
+      archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
+      sourcePhotoPath: clearSourcePhotoPath
+          ? null
+          : sourcePhotoPath ?? this.sourcePhotoPath,
     );
   }
 
@@ -93,11 +109,14 @@ class Medication {
       'permitNo': permitNo ?? '',
       'dosage': dosage,
       'notes': notes,
+      'medicineCode': medicineCode,
       'colorIndex': colorIndex,
       'hour': hour,
       'minute': minute,
       'isEnabled': isEnabled ? 1 : 0,
+      'isArchived': isArchived ? 1 : 0,
       'createdAt': createdAt.toIso8601String(),
+      'archivedAt': archivedAt?.toIso8601String(),
       'sourcePhotoPath': sourcePhotoPath,
     };
   }
@@ -115,13 +134,18 @@ class Medication {
       permitNo: map['permitNo'] as String?,
       dosage: (map['dosage'] as String?) ?? '',
       notes: (map['notes'] as String?) ?? '',
+      medicineCode: (map['medicineCode'] as int?) ?? 0,
       colorIndex: map['colorIndex'] as int,
       hour: map['hour'] as int,
       minute: map['minute'] as int,
       isEnabled: (map['isEnabled'] as int?) == 1,
+      isArchived: (map['isArchived'] as int?) == 1,
       createdAt: map['createdAt'] != null
           ? DateTime.parse(map['createdAt'] as String)
           : DateTime.now(),
+      archivedAt: (map['archivedAt'] as String?)?.isNotEmpty == true
+          ? DateTime.parse(map['archivedAt'] as String)
+          : null,
       sourcePhotoPath: map['sourcePhotoPath'] as String?,
     );
   }
@@ -130,5 +154,6 @@ class Medication {
   factory Medication.fromJson(String source) =>
       Medication.fromMap(json.decode(source) as Map<String, dynamic>);
 
-  String get timeLabel => '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  String get timeLabel =>
+      '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
 }

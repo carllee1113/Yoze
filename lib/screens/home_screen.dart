@@ -10,13 +10,15 @@ import '../theme/rainbow_colors.dart';
 import '../widgets/rainbow_progress.dart';
 
 final medicationListProvider = FutureProvider<List<Medication>>((ref) async {
-  return DatabaseHelper.getAllMedications();
+  return DatabaseHelper.getActiveMedications();
 });
 
 final todayStatusProvider = FutureProvider.family<Map<int, DoseStatus>, String>(
   (ref, date) async {
     final map = await DatabaseHelper.getTodayDoseStatusMap(date);
-    return map.map((k, v) => MapEntry(k, DoseStatus.values[v['status'] as int? ?? 0]));
+    return map.map(
+      (k, v) => MapEntry(k, DoseStatus.values[v['status'] as int? ?? 0]),
+    );
   },
 );
 
@@ -37,6 +39,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: '使用說明',
+          icon: const Icon(Icons.help_outline, size: 28),
+          onPressed: () {
+            Navigator.of(context).pushNamed('/guide');
+          },
+        ),
         title: const Text('YOZE 藥師'),
         actions: [
           IconButton(
@@ -109,14 +118,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               heroTag: 'camera_fab',
               backgroundColor: Colors.blue.shade600,
               onPressed: () async {
-                await Navigator.of(context).pushNamed(
-                  '/setup',
-                  arguments: {'startWithCamera': true},
-                );
+                await Navigator.of(
+                  context,
+                ).pushNamed('/setup', arguments: {'startWithCamera': true});
                 ref.invalidate(medicationListProvider);
                 ref.invalidate(todayStatusProvider(_today));
               },
-              child: const Icon(Icons.camera_alt, size: 26, color: Colors.white),
+              child: const Icon(
+                Icons.camera_alt,
+                size: 26,
+                color: Colors.white,
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -147,16 +159,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     for (final med in medications.where((m) => m.isEnabled)) {
       final status = statusMap[med.id!] ?? DoseStatus.pending;
-      final key = '${med.hour.toString().padLeft(2, '0')}:${med.minute.toString().padLeft(2, '0')}';
+      final key =
+          '${med.hour.toString().padLeft(2, '0')}:${med.minute.toString().padLeft(2, '0')}';
       grouped.putIfAbsent(key, () => <SlotMedicationItem>[]);
       grouped[key]!.add(
         SlotMedicationItem(
           medicationId: med.id!,
+          medicineCode: med.medicineCode,
           medicationName: med.name,
           dosage: med.dosePerTime.isNotEmpty ? med.dosePerTime : med.dosage,
           colorIndex: med.colorIndex,
-          color: RainbowColors.colors[med.colorIndex % RainbowColors.colors.length],
-          colorLabel: RainbowColors.labels[med.colorIndex % RainbowColors.labels.length],
+          color: RainbowColors
+              .colors[med.colorIndex % RainbowColors.colors.length],
+          colorLabel: RainbowColors
+              .labels[med.colorIndex % RainbowColors.labels.length],
           status: status,
         ),
       );
@@ -251,7 +267,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               progress == 1.0 ? '🎉 今日全部完成！' : '$confirmed / $total 次已完成',
               style: TextStyle(
                 fontSize: 18,
-                color: progress == 1.0 ? Colors.green.shade700 : Colors.grey.shade700,
+                color: progress == 1.0
+                    ? Colors.green.shade700
+                    : Colors.grey.shade700,
                 fontWeight: FontWeight.w600,
               ),
             ),

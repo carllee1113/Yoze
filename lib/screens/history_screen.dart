@@ -13,7 +13,11 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  DateTime _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  DateTime _focusedMonth = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    1,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +55,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
           IconButton(
             onPressed: () {
               setState(() {
-                _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+                _focusedMonth = DateTime(
+                  _focusedMonth.year,
+                  _focusedMonth.month - 1,
+                  1,
+                );
               });
             },
             icon: const Icon(Icons.chevron_left),
@@ -60,14 +68,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
             child: Center(
               child: Text(
                 monthLabel,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
           IconButton(
             onPressed: () {
               setState(() {
-                _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
+                _focusedMonth = DateTime(
+                  _focusedMonth.year,
+                  _focusedMonth.month + 1,
+                  1,
+                );
               });
             },
             icon: const Icon(Icons.chevron_right),
@@ -87,12 +102,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
     for (final w in weekdays) {
-      cells.add(Center(
-        child: Text(
-          w,
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700),
+      cells.add(
+        Center(
+          child: Text(
+            w,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade700,
+            ),
+          ),
         ),
-      ));
+      );
     }
 
     for (int i = 0; i < firstWeekday; i++) {
@@ -127,7 +147,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 children: [
                   Text(
                     '$day',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   _buildDayMarker(progress),
@@ -165,17 +188,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Container(
       width: 12,
       height: 12,
-      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+      decoration: const BoxDecoration(
+        color: Colors.red,
+        shape: BoxShape.circle,
+      ),
     );
   }
 
-  Future<Map<DateTime, DayProgress>> _loadMonthProgress(DateTime monthStart) async {
-    final medications = await DatabaseHelper.getAllMedications();
-    final enabledMeds = medications.where((m) => m.isEnabled).toList();
+  Future<Map<DateTime, DayProgress>> _loadMonthProgress(
+    DateTime monthStart,
+  ) async {
+    final enabledMeds = await DatabaseHelper.getActiveMedications();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final daysInMonth = DateUtils.getDaysInMonth(monthStart.year, monthStart.month);
+    final daysInMonth = DateUtils.getDaysInMonth(
+      monthStart.year,
+      monthStart.month,
+    );
     final result = <DateTime, DayProgress>{};
 
     for (int day = 1; day <= daysInMonth; day++) {
@@ -190,7 +220,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
       final nextDate = date.add(const Duration(days: 1));
       final dateStr = DateFormat('yyyy-MM-dd').format(date);
 
-      final activeMeds = enabledMeds.where((m) => m.createdAt.isBefore(nextDate)).toList();
+      final activeMeds = enabledMeds
+          .where((m) => m.createdAt.isBefore(nextDate))
+          .toList();
       final slotGroups = _groupMedicationsByTime(activeMeds);
 
       final totalSlots = slotGroups.length;
@@ -201,7 +233,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
       final records = await DatabaseHelper.getDoseRecordsForDate(dateStr);
       final confirmedByMedId = <int, bool>{
-        for (final r in records) r.medicationId: r.status == DoseStatus.confirmed,
+        for (final r in records)
+          r.medicationId: r.status == DoseStatus.confirmed,
       };
 
       int completedSlots = 0;
@@ -219,7 +252,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Map<String, List<int>> _groupMedicationsByTime(List<Medication> meds) {
     final map = <String, List<int>>{};
     for (final med in meds) {
-      final key = '${med.hour.toString().padLeft(2, '0')}:${med.minute.toString().padLeft(2, '0')}';
+      final key =
+          '${med.hour.toString().padLeft(2, '0')}:${med.minute.toString().padLeft(2, '0')}';
       map.putIfAbsent(key, () => <int>[]);
       map[key]!.add(med.id!);
     }

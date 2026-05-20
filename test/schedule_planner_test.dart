@@ -44,4 +44,24 @@ void main() {
     expect(aCount, 3);
     expect(bCount, 4);
   });
+
+  test('generateDailySlots keeps high frequency medicines inside 12 hours', () {
+    final slots = SchedulePlanner.generateDailySlots(
+      startHour: 8,
+      startMinute: 0,
+      slotCount: 7,
+    );
+
+    expect(slots.length, 7);
+    expect(slots.first.hour, 8);
+    expect(slots.first.minute, 0);
+    expect(slots.last.hour, 20);
+    expect(slots.last.minute, 0);
+
+    final minutes = slots.map((s) => s.hour * 60 + s.minute).toList();
+    expect(minutes, isNot(contains(0)));
+    expect(minutes, isNot(contains(180)));
+    expect(minutes.every((minute) => minute >= 8 * 60), isTrue);
+    expect(minutes.every((minute) => minute <= 20 * 60), isTrue);
+  });
 }

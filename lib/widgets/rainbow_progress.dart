@@ -4,6 +4,7 @@ import '../models/dose_record.dart';
 
 class SlotMedicationItem {
   final int medicationId;
+  final int medicineCode;
   final String medicationName;
   final String dosage;
   final int colorIndex;
@@ -13,6 +14,7 @@ class SlotMedicationItem {
 
   const SlotMedicationItem({
     required this.medicationId,
+    required this.medicineCode,
     required this.medicationName,
     required this.dosage,
     required this.colorIndex,
@@ -48,7 +50,8 @@ class RainbowProgress extends StatelessWidget {
     IntakeSlotData slot,
     SlotMedicationItem item,
     bool complete,
-  )? onToggleItem;
+  )?
+  onToggleItem;
 
   const RainbowProgress({
     super.key,
@@ -77,12 +80,22 @@ class RainbowProgress extends StatelessWidget {
     }
 
     return Column(
-      children: slots.map((slot) => _buildIntakeCard(context, slot)).toList(),
+      children: [
+        for (int i = 0; i < slots.length; i++)
+          _buildIntakeCard(context, slots[i], i + 1),
+      ],
     );
   }
 
-  Widget _buildIntakeCard(BuildContext context, IntakeSlotData slot) {
+  Widget _buildIntakeCard(
+    BuildContext context,
+    IntakeSlotData slot,
+    int sequence,
+  ) {
     final allDone = slot.isComplete;
+    final totalDose = _formatDoseTotal(
+      slot.items.fold<double>(0, (sum, item) => sum + _parseDose(item.dosage)),
+    );
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       shape: RoundedRectangleBorder(
@@ -101,11 +114,15 @@ class RainbowProgress extends StatelessWidget {
               children: [
                 const Icon(Icons.schedule),
                 const SizedBox(width: 8),
-                Text(
-                  slot.timeLabel,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    '${slot.timeLabel}  第$sequence次，共$totalDose粒/份量',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-                const Spacer(),
                 const Text('全部', style: TextStyle(fontWeight: FontWeight.w600)),
                 Checkbox(
                   value: allDone,
@@ -135,7 +152,9 @@ class RainbowProgress extends StatelessWidget {
         color: done ? Colors.green.shade50 : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: done ? Colors.green.shade300 : item.color.withValues(alpha: 0.35),
+          color: done
+              ? Colors.green.shade300
+              : item.color.withValues(alpha: 0.35),
         ),
       ),
       child: Row(
@@ -143,7 +162,10 @@ class RainbowProgress extends StatelessWidget {
           Container(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(color: item.color, shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: item.color,
+              shape: BoxShape.circle,
+            ),
             child: Center(
               child: Text(
                 item.colorLabel,
@@ -161,8 +183,11 @@ class RainbowProgress extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.medicationName,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  '${item.medicineCode.toString().padLeft(2, '0')} ${item.medicationName}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 if (item.dosage.isNotEmpty)
                   Text(
@@ -191,5 +216,17 @@ class RainbowProgress extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  double _parseDose(String value) {
+    final match = RegExp(r'\d+(?:\.\d+)?').firstMatch(value);
+    return double.tryParse(match?.group(0) ?? '') ?? 0;
+  }
+
+  String _formatDoseTotal(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toInt().toString();
+    }
+    return value.toStringAsFixed(1);
   }
 }

@@ -28,15 +28,17 @@ class SchedulePlanner {
   }) {
     if (slotCount <= 0) return const [];
     final totalStartMinutes = startHour * 60 + startMinute;
-    // Product rule:
-    // - 4 slots/day follows the caregiver-friendly 4-hour cadence.
-    // - otherwise use even spacing to avoid duplicated clock times.
-    final intervalMinutes =
-        slotCount == 4 ? 4 * 60 : (24 * 60 / slotCount).floor();
+    // Product rule: all daily doses are distributed inside the user's
+    // 12-hour waking window. For example, a start time of 08:00 and
+    // 4 slots gives 08:00, 12:00, 16:00, 20:00.
+    const activeWindowMinutes = 12 * 60;
 
     final slots = <ScheduleSlot>[];
     for (int i = 0; i < slotCount; i++) {
-      final totalMinutes = (totalStartMinutes + intervalMinutes * i) % (24 * 60);
+      final offsetMinutes = slotCount == 1
+          ? 0
+          : (activeWindowMinutes * i / (slotCount - 1)).round();
+      final totalMinutes = (totalStartMinutes + offsetMinutes) % (24 * 60);
       slots.add(
         ScheduleSlot(
           index: i,
@@ -68,8 +70,10 @@ class SchedulePlanner {
       slotCount: maxFrequency,
     );
 
-    final slotBuckets =
-        List<List<ExtractedMedication>>.generate(maxFrequency, (_) => <ExtractedMedication>[]);
+    final slotBuckets = List<List<ExtractedMedication>>.generate(
+      maxFrequency,
+      (_) => <ExtractedMedication>[],
+    );
 
     for (final med in medications) {
       final doseCount = med.frequency.clamp(1, maxFrequency);

@@ -4,6 +4,7 @@ import 'screens/home_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/photo_capture_screen.dart';
 import 'screens/processing_screen.dart';
+import 'screens/user_guide_screen.dart';
 import 'screens/verification_screen.dart';
 
 class YozeApp extends StatelessWidget {
@@ -30,8 +31,12 @@ class YozeApp extends StatelessWidget {
             );
           case '/history':
             return MaterialPageRoute(builder: (_) => const HistoryScreen());
+          case '/guide':
+            return MaterialPageRoute(builder: (_) => const UserGuideScreen());
           case '/capture':
-            return MaterialPageRoute(builder: (_) => const PhotoCaptureScreen());
+            return MaterialPageRoute(
+              builder: (_) => const PhotoCaptureScreen(),
+            );
           case '/processing':
             final args = settings.arguments as Map<String, dynamic>?;
             return MaterialPageRoute(
@@ -44,9 +49,8 @@ class YozeApp extends StatelessWidget {
           case '/verify':
             final args = settings.arguments as Map<String, dynamic>?;
             return MaterialPageRoute(
-              builder: (_) => VerificationScreen(
-                imagePath: args?['imagePath'] ?? '',
-              ),
+              builder: (_) =>
+                  VerificationScreen(imagePath: args?['imagePath'] ?? ''),
             );
           default:
             return MaterialPageRoute(builder: (_) => const HomeScreen());

@@ -112,10 +112,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
               // Hints
               Text(
                 '請稍候，正在識別文字...',
-                style: TextStyle(
-                  color: Colors.grey.shade400,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 16),
               ),
             ],
           ),
@@ -153,9 +150,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                 );
               } else {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const PhotoCaptureScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const PhotoCaptureScreen()),
                 );
               }
             },
@@ -170,9 +165,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                 Navigator.of(context).pop([_manualMedication()]);
               } else {
                 Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const VerificationScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const VerificationScreen()),
                 );
               }
             },
@@ -230,7 +223,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
       drugName: '',
       form: '藥丸',
       administration: '飯後',
-      dosePerTime: '4',
+      dosePerTime: '1',
       frequency: 1,
       colorIndex: 0,
       rawText: '',

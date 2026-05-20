@@ -8,8 +8,9 @@ import 'fuzzy_matcher_service.dart';
 
 class OcrService {
   static final TextRecognizer _latinTextRecognizer = TextRecognizer();
-  static final TextRecognizer _chineseTextRecognizer =
-      TextRecognizer(script: TextRecognitionScript.chinese);
+  static final TextRecognizer _chineseTextRecognizer = TextRecognizer(
+    script: TextRecognitionScript.chinese,
+  );
   static bool _isInitialized = false;
   static String _lastDiagnostic = '';
 
@@ -21,7 +22,9 @@ class OcrService {
     _isInitialized = true;
   }
 
-  static Future<List<ExtractedMedication>> processImage(String imagePath) async {
+  static Future<List<ExtractedMedication>> processImage(
+    String imagePath,
+  ) async {
     // Ensure reference data is loaded
     await initialize();
 
@@ -57,10 +60,7 @@ class OcrService {
         chineseChars = chineseText.text.length;
         chineseBlocks = chineseText.blocks.length;
         fullText = _mergeRecognizedText(fullText, chineseText.text);
-        blocks = [
-          ...blocks,
-          ..._toOcrTextBlocks(chineseText),
-        ];
+        blocks = [...blocks, ..._toOcrTextBlocks(chineseText)];
         medications = ExtractionLogic.parseTextBlocks(blocks, fullText);
         outcome = medications.isEmpty
             ? 'Chinese OCR fallback completed; parser found no medication'
@@ -94,7 +94,8 @@ class OcrService {
     }
 
     if (medications.isEmpty) {
-      outcome = 'Text recognized but parser found no medication; manual card created';
+      outcome =
+          'Text recognized but parser found no medication; manual card created';
       medications = [_buildManualMedication(rawText: fullText)];
     }
 
@@ -137,13 +138,13 @@ class OcrService {
     required String outcome,
     required String rawText,
   }) {
-    final preview = rawText
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final preview = rawText.replaceAll(RegExp(r'\s+'), ' ').trim();
     final trimmedPreview = preview.length > 220
         ? '${preview.substring(0, 220)}...'
         : preview;
-    final sizeLabel = imageSize == null ? 'unknown' : '${(imageSize / 1024).round()} KB';
+    final sizeLabel = imageSize == null
+        ? 'unknown'
+        : '${(imageSize / 1024).round()} KB';
 
     _lastDiagnostic = [
       'OCR diagnostic',
@@ -168,7 +169,9 @@ class OcrService {
     }).toList();
   }
 
-  static Future<RecognizedText?> _tryChineseRecognition(InputImage inputImage) async {
+  static Future<RecognizedText?> _tryChineseRecognition(
+    InputImage inputImage,
+  ) async {
     try {
       return await _chineseTextRecognizer.processImage(inputImage);
     } catch (e) {
@@ -185,12 +188,16 @@ class OcrService {
     final first = primary.trim();
     final second = secondary.trim();
     if (first.isEmpty) return second;
-    if (second.isEmpty || first == second || first.contains(second)) return first;
+    if (second.isEmpty || first == second || first.contains(second)) {
+      return first;
+    }
     if (second.contains(first)) return second;
     return '$first\n$second';
   }
 
-  static Future<ExtractedMedication?> _buildFallbackMedication(String text) async {
+  static Future<ExtractedMedication?> _buildFallbackMedication(
+    String text,
+  ) async {
     final permitNo = FuzzyMatcherService.extractPermitNumber(text);
     if (permitNo.isNotEmpty) {
       final byPermit = await FuzzyMatcherService.findByPermitNo(permitNo);
@@ -218,8 +225,12 @@ class OcrService {
     final normalized = text.replaceAll('\n', ' ').trim();
     if (normalized.isEmpty) return null;
 
-    final dosagePattern = RegExp(r'(\d+\.?\d*)\s*(mg|g|ml|mcg)', caseSensitive: false);
-    final dosage = dosagePattern.firstMatch(normalized)?.group(0)?.toUpperCase() ?? '';
+    final dosagePattern = RegExp(
+      r'(\d+\.?\d*)\s*(mg|g|ml|mcg)',
+      caseSensitive: false,
+    );
+    final dosage =
+        dosagePattern.firstMatch(normalized)?.group(0)?.toUpperCase() ?? '';
 
     const formKeywords = [
       'TABLET',
@@ -240,7 +251,11 @@ class OcrService {
     final upper = normalized.toUpperCase();
     for (final f in formKeywords) {
       if (upper.contains(f)) {
-        form = f == 'TAB' ? 'TABLET' : f == 'CAP' ? 'CAPSULE' : f;
+        form = f == 'TAB'
+            ? 'TABLET'
+            : f == 'CAP'
+            ? 'CAPSULE'
+            : f;
         break;
       }
     }
@@ -305,7 +320,7 @@ class OcrService {
       dosagePerUnit: '',
       administration: '飯後',
       frequency: 1,
-      dosePerTime: '4',
+      dosePerTime: '1',
       durationDays: null,
       totalQuantity: null,
       permitNo: null,
@@ -348,7 +363,9 @@ class OcrService {
       return med.copyWith(
         drugName: ref.name, // Correct the drug name
         form: med.form.isNotEmpty ? med.form : ref.form,
-        dosagePerUnit: med.dosagePerUnit.isNotEmpty ? med.dosagePerUnit : ref.dosage,
+        dosagePerUnit: med.dosagePerUnit.isNotEmpty
+            ? med.dosagePerUnit
+            : ref.dosage,
         permitNo: permitNo.isNotEmpty ? permitNo : ref.permitNo,
         // Keep user's extracted schedule, frequency, etc.
       );

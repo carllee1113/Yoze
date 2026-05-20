@@ -71,7 +71,9 @@ class PhotoScanNotifier extends StateNotifier<PhotoScanState> {
 
     try {
       state = state.copyWith(progress: 0.3);
-      final medications = await OcrService.processImage(imagePath);
+      final medications = (await OcrService.processImage(
+        imagePath,
+      )).map((med) => med.copyWith(sourcePhotoPath: imagePath)).toList();
 
       state = state.copyWith(
         state: ScanState.verified,
@@ -89,20 +91,26 @@ class PhotoScanNotifier extends StateNotifier<PhotoScanState> {
   }
 
   void updateMedication(int index, ExtractedMedication updated) {
-    final updatedList = List<ExtractedMedication>.from(state.extractedMedications);
+    final updatedList = List<ExtractedMedication>.from(
+      state.extractedMedications,
+    );
     updatedList[index] = updated;
     state = state.copyWith(extractedMedications: updatedList);
   }
 
   void removeMedication(int index) {
-    final updatedList = List<ExtractedMedication>.from(state.extractedMedications);
+    final updatedList = List<ExtractedMedication>.from(
+      state.extractedMedications,
+    );
     updatedList.removeAt(index);
     state = state.copyWith(extractedMedications: updatedList);
   }
 
   void addMedication(ExtractedMedication medication) {
-    final updatedList = List<ExtractedMedication>.from(state.extractedMedications);
-    updatedList.add(medication);
+    final updatedList = List<ExtractedMedication>.from(
+      state.extractedMedications,
+    );
+    updatedList.insert(0, medication);
     state = state.copyWith(extractedMedications: updatedList);
   }
 
@@ -122,5 +130,5 @@ class PhotoScanNotifier extends StateNotifier<PhotoScanState> {
 
 final photoScanProvider =
     StateNotifierProvider<PhotoScanNotifier, PhotoScanState>((ref) {
-  return PhotoScanNotifier();
-});
+      return PhotoScanNotifier();
+    });
