@@ -183,6 +183,40 @@ class DatabaseHelper {
     return 0;
   }
 
+  static Future<int> setDoseStatus({
+    required int medicationId,
+    required String date,
+    required int doseIndex,
+    required DoseStatus status,
+  }) async {
+    final db = await database;
+    final existing = await getDoseRecord(medicationId, date, doseIndex);
+    final confirmedAt = status == DoseStatus.confirmed
+        ? DateTime.now().toIso8601String()
+        : null;
+
+    if (existing != null) {
+      return db.update(
+        'dose_records',
+        {
+          'status': status.index,
+          'confirmedAt': confirmedAt,
+        },
+        where: 'id = ?',
+        whereArgs: [existing.id],
+      );
+    }
+
+    return db.insert('dose_records', {
+      'medicationId': medicationId,
+      'date': date,
+      'doseIndex': doseIndex,
+      'status': status.index,
+      'confirmedAt': confirmedAt,
+      'notifiedAt': null,
+    });
+  }
+
   static Future<List<Map<String, dynamic>>> getTodaySummary(String date) async {
     final db = await database;
     final result = await db.rawQuery('''

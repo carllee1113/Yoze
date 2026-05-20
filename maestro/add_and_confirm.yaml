@@ -15,11 +15,11 @@ appId: com.yoze.yoze
 - tapOn:
     point: "88%,92%"
 
-# Wait for add medication screen
-- assertVisible: "添加藥物"
+# Wait for setup screen
+- assertVisible: "批量設定藥物"
 
 # Enter medication name
-- tapOn: "例如：二甲雙胍"
+- tapOn: "例如：PARACETAMOL"
 - inputText: "PARACETAMOL"
 - hideKeyboard
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
-import 'screens/add_medication_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/photo_capture_screen.dart';
 import 'screens/processing_screen.dart';
@@ -21,9 +20,13 @@ class YozeApp extends StatelessWidget {
         switch (settings.name) {
           case '/':
             return MaterialPageRoute(builder: (_) => const HomeScreen());
-          case '/add':
+          case '/setup':
+            final args = settings.arguments as Map<String, dynamic>?;
             return MaterialPageRoute(
-              builder: (_) => const AddMedicationScreen(),
+              builder: (_) => VerificationScreen(
+                imagePath: args?['imagePath'] as String?,
+                startWithCamera: args?['startWithCamera'] as bool? ?? false,
+              ),
             );
           case '/history':
             return MaterialPageRoute(builder: (_) => const HistoryScreen());
@@ -34,6 +37,8 @@ class YozeApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (_) => ProcessingScreen(
                 imagePath: args?['imagePath'] ?? '',
+                returnExtractedMedications:
+                    args?['returnExtractedMedications'] as bool? ?? false,
               ),
             );
           case '/verify':

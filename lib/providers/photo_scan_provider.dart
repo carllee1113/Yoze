@@ -11,6 +11,7 @@ class PhotoScanState {
   final String? imagePath;
   final List<ExtractedMedication> extractedMedications;
   final String? errorMessage;
+  final String? diagnosticMessage;
   final double progress;
 
   PhotoScanState({
@@ -18,6 +19,7 @@ class PhotoScanState {
     this.imagePath,
     this.extractedMedications = const [],
     this.errorMessage,
+    this.diagnosticMessage,
     this.progress = 0.0,
   });
 
@@ -26,6 +28,7 @@ class PhotoScanState {
     String? imagePath,
     List<ExtractedMedication>? extractedMedications,
     String? errorMessage,
+    String? diagnosticMessage,
     double? progress,
   }) {
     return PhotoScanState(
@@ -33,6 +36,7 @@ class PhotoScanState {
       imagePath: imagePath ?? this.imagePath,
       extractedMedications: extractedMedications ?? this.extractedMedications,
       errorMessage: errorMessage ?? this.errorMessage,
+      diagnosticMessage: diagnosticMessage ?? this.diagnosticMessage,
       progress: progress ?? this.progress,
     );
   }
@@ -59,7 +63,7 @@ class PhotoScanNotifier extends StateNotifier<PhotoScanState> {
   }
 
   Future<void> processImage(String imagePath) async {
-    state = state.copyWith(
+    state = PhotoScanState(
       state: ScanState.processing,
       imagePath: imagePath,
       progress: 0.1,
@@ -72,12 +76,14 @@ class PhotoScanNotifier extends StateNotifier<PhotoScanState> {
       state = state.copyWith(
         state: ScanState.verified,
         extractedMedications: medications,
+        diagnosticMessage: OcrService.lastDiagnostic,
         progress: 1.0,
       );
     } catch (e) {
       state = state.copyWith(
         state: ScanState.error,
         errorMessage: '識別失敗：$e',
+        diagnosticMessage: OcrService.lastDiagnostic,
       );
     }
   }
@@ -98,6 +104,15 @@ class PhotoScanNotifier extends StateNotifier<PhotoScanState> {
     final updatedList = List<ExtractedMedication>.from(state.extractedMedications);
     updatedList.add(medication);
     state = state.copyWith(extractedMedications: updatedList);
+  }
+
+  void setMedications(List<ExtractedMedication> medications) {
+    state = state.copyWith(
+      extractedMedications: List<ExtractedMedication>.from(medications),
+      state: ScanState.verified,
+      progress: 1.0,
+      errorMessage: null,
+    );
   }
 
   void reset() {

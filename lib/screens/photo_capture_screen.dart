@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image/image.dart' as img;
 import 'processing_screen.dart';
 
 class PhotoCaptureScreen extends ConsumerStatefulWidget {
-  const PhotoCaptureScreen({super.key});
+  final bool returnExtractedMedications;
+
+  const PhotoCaptureScreen({
+    super.key,
+    this.returnExtractedMedications = false,
+  });
 
   @override
   ConsumerState<PhotoCaptureScreen> createState() => _PhotoCaptureScreenState();
@@ -50,6 +54,7 @@ class _PhotoCaptureScreenState extends ConsumerState<PhotoCaptureScreen> {
       );
 
       await _controller!.initialize();
+      await _configureCameraForLabels();
       await _controller!.setFlashMode(_flashMode);
 
       if (mounted) {
@@ -84,6 +89,20 @@ class _PhotoCaptureScreenState extends ConsumerState<PhotoCaptureScreen> {
     await _controller!.setFlashMode(_flashMode);
   }
 
+  Future<void> _configureCameraForLabels() async {
+    final controller = _controller;
+    if (controller == null) return;
+
+    try {
+      await controller.setFocusMode(FocusMode.auto);
+      await controller.setExposureMode(ExposureMode.auto);
+      await controller.setFocusPoint(const Offset(0.5, 0.5));
+      await controller.setExposurePoint(const Offset(0.5, 0.5));
+    } catch (_) {
+      // Some Android camera drivers do not support manual focus/exposure points.
+    }
+  }
+
   Future<void> _captureImage() async {
     if (_controller == null || _isCapturing) return;
 
@@ -92,6 +111,9 @@ class _PhotoCaptureScreenState extends ConsumerState<PhotoCaptureScreen> {
     });
 
     try {
+      await _configureCameraForLabels();
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+
       final XFile image = await _controller!.takePicture();
 
       final savedPath = await _saveImage(image.path);
@@ -99,7 +121,10 @@ class _PhotoCaptureScreenState extends ConsumerState<PhotoCaptureScreen> {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => ProcessingScreen(imagePath: savedPath),
+            builder: (_) => ProcessingScreen(
+              imagePath: savedPath,
+              returnExtractedMedications: widget.returnExtractedMedications,
+            ),
           ),
         );
       }
@@ -128,59 +153,10 @@ class _PhotoCaptureScreenState extends ConsumerState<PhotoCaptureScreen> {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final savedPath = '${photosDir.path}/$timestamp.jpg';
 
-    // Crop image to the guide frame area (centered, 85% width, 35% height at 42% from top)
-    await _cropToGuideFrame(sourcePath, savedPath);
+    // OCR works best with the full label. The on-screen frame is only a guide.
+    await File(sourcePath).copy(savedPath);
 
     return savedPath;
-  }
-
-  Future<void> _cropToGuideFrame(String sourcePath, String outputPath) async {
-    try {
-      final bytes = await File(sourcePath).readAsBytes();
-      final image = img.decodeImage(bytes);
-      if (image == null) {
-        // If decode fails, just copy original
-        await File(sourcePath).copy(outputPath);
-        return;
-      }
-
-      // Calculate guide frame region
-      // Frame is: center at 42% height, 85% width, 35% height
-      final imgWidth = image.width;
-      final imgHeight = image.height;
-
-      final frameWidth = imgWidth * 0.85;
-      final frameHeight = imgHeight * 0.35;
-      final centerX = imgWidth / 2;
-      final centerY = imgHeight * 0.42;
-
-      final left = (centerX - frameWidth / 2).round();
-      final top = (centerY - frameHeight / 2).round();
-      final right = (centerX + frameWidth / 2).round();
-      final bottom = (centerY + frameHeight / 2).round();
-
-      // Ensure bounds are within image
-      final cropLeft = left.clamp(0, imgWidth - 1);
-      final cropTop = top.clamp(0, imgHeight - 1);
-      final cropRight = right.clamp(0, imgWidth);
-      final cropBottom = bottom.clamp(0, imgHeight);
-
-      // Crop the image
-      final cropped = img.copyCrop(
-        image,
-        x: cropLeft,
-        y: cropTop,
-        width: cropRight - cropLeft,
-        height: cropBottom - cropTop,
-      );
-
-      // Save cropped image
-      final jpg = img.encodeJpg(cropped, quality: 90);
-      await File(outputPath).writeAsBytes(jpg);
-    } catch (e) {
-      // If crop fails, copy original
-      await File(sourcePath).copy(outputPath);
-    }
   }
 
   Future<void> _pickFromGallery() async {
@@ -200,7 +176,10 @@ class _PhotoCaptureScreenState extends ConsumerState<PhotoCaptureScreen> {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => ProcessingScreen(imagePath: savedPath),
+            builder: (_) => ProcessingScreen(
+              imagePath: savedPath,
+              returnExtractedMedications: widget.returnExtractedMedications,
+            ),
           ),
         );
       }

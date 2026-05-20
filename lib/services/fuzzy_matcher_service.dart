@@ -170,9 +170,23 @@ class FuzzyMatcherService {
 
   /// Extract HK-XXXXX permit number from text
   static String extractPermitNumber(String text) {
-    final pattern = RegExp(r'HK-\d{5}');
-    final match = pattern.firstMatch(text.toUpperCase());
-    return match?.group(0) ?? '';
+    final pattern = RegExp(r'HK[-\s]?(\d{5})', caseSensitive: false);
+    final match = pattern.firstMatch(text);
+    if (match == null) return '';
+    final digits = match.group(1);
+    if (digits == null || digits.length != 5) return '';
+    return 'HK-$digits';
+  }
+
+  static Future<MedicineReferenceEntry?> findByPermitNo(String permitNo) async {
+    await loadReference();
+    if (permitNo.isEmpty || _referenceList.isEmpty) return null;
+    for (final entry in _referenceList) {
+      if (entry.permitNo.toUpperCase() == permitNo.toUpperCase()) {
+        return entry;
+      }
+    }
+    return null;
   }
 
   /// Normalize string for comparison

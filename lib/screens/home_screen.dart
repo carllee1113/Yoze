@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../database/database_helper.dart';
-import '../models/medication.dart';
 import '../models/dose_record.dart';
+import '../models/medication.dart';
+import '../services/notification_service.dart';
 import '../theme/rainbow_colors.dart';
 import '../widgets/rainbow_progress.dart';
-import '../services/notification_service.dart';
 
 final medicationListProvider = FutureProvider<List<Medication>>((ref) async {
   return DatabaseHelper.getAllMedications();
 });
 
-final todayStatusProvider =
-    FutureProvider.family<Map<int, DoseStatus>, String>(
-        (ref, date) async {
-  final map = await DatabaseHelper.getTodayDoseStatusMap(date);
-  return map.map((k, v) => MapEntry(k, DoseStatus.values[v['status'] as int? ?? 0]));
-});
+final todayStatusProvider = FutureProvider.family<Map<int, DoseStatus>, String>(
+  (ref, date) async {
+    final map = await DatabaseHelper.getTodayDoseStatusMap(date);
+    return map.map((k, v) => MapEntry(k, DoseStatus.values[v['status'] as int? ?? 0]));
+  },
+);
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -71,32 +72,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             );
           }
 
-          final now = DateTime.now();
           final statusMap = statusAsync.valueOrNull ?? {};
+          final slots = _buildGroupedSlots(medications, statusMap);
 
-          final doseData = medications
-              .where((m) => m.isEnabled)
-              .map((m) {
-                final status = statusMap[m.id!] ?? DoseStatus.pending;
-                return DoseDatum(
-                  medicationId: m.id!,
-                  medicationName: m.name,
-                  dosage: m.dosage,
-                  colorIndex: m.colorIndex,
-                  hour: m.hour,
-                  minute: m.minute,
-                  status: status,
-                );
-              })
-              .toList();
-
-          final slots = SlotData.fromDoseData(
-            doseData,
-            now.hour,
-            now.minute,
-          );
-
-          final confirmed = slots.where((s) => s.status == DoseStatus.confirmed).length;
+          final confirmed = slots.where((s) => s.isComplete).length;
           final total = slots.length;
           final progress = total > 0 ? confirmed / total : 0.0;
 
@@ -108,11 +87,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _buildProgressHeader(medications, confirmed, total, progress),
+                _buildProgressHeader(confirmed, total, progress),
                 const SizedBox(height: 16),
                 RainbowProgress(
                   slots: slots,
-                  onTap: (slot) => _confirmDose(slot),
+                  onToggleAll: _toggleAllInSlot,
+                  onToggleItem: _toggleSingleMedication,
                 ),
               ],
             ),
@@ -122,21 +102,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Camera button (smaller, above)
           SizedBox(
             width: 52,
             height: 52,
             child: FloatingActionButton(
               heroTag: 'camera_fab',
               backgroundColor: Colors.blue.shade600,
-              onPressed: () {
-                Navigator.of(context).pushNamed('/capture');
+              onPressed: () async {
+                await Navigator.of(context).pushNamed(
+                  '/setup',
+                  arguments: {'startWithCamera': true},
+                );
+                ref.invalidate(medicationListProvider);
+                ref.invalidate(todayStatusProvider(_today));
               },
               child: const Icon(Icons.camera_alt, size: 26, color: Colors.white),
             ),
           ),
           const SizedBox(height: 12),
-          // Add medication button (main)
           SizedBox(
             width: 64,
             height: 64,
@@ -144,7 +127,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               key: const Key('add_medication_fab'),
               heroTag: 'add_fab',
               onPressed: () async {
-                await Navigator.of(context).pushNamed('/add');
+                await Navigator.of(context).pushNamed('/setup');
                 ref.invalidate(medicationListProvider);
                 ref.invalidate(todayStatusProvider(_today));
               },
@@ -156,42 +139,95 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Future<void> _confirmDose(SlotData slot) async {
-    if (slot.status == DoseStatus.confirmed) return;
+  List<IntakeSlotData> _buildGroupedSlots(
+    List<Medication> medications,
+    Map<int, DoseStatus> statusMap,
+  ) {
+    final grouped = <String, List<SlotMedicationItem>>{};
 
-    await DatabaseHelper.confirmDose(
-      slot.medicationId,
-      _today,
-      0,
-    );
-
-    NotificationService.speak('${slot.medicationName} 已吃');
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ ${slot.medicationName} 已記錄'),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
+    for (final med in medications.where((m) => m.isEnabled)) {
+      final status = statusMap[med.id!] ?? DoseStatus.pending;
+      final key = '${med.hour.toString().padLeft(2, '0')}:${med.minute.toString().padLeft(2, '0')}';
+      grouped.putIfAbsent(key, () => <SlotMedicationItem>[]);
+      grouped[key]!.add(
+        SlotMedicationItem(
+          medicationId: med.id!,
+          medicationName: med.name,
+          dosage: med.dosePerTime.isNotEmpty ? med.dosePerTime : med.dosage,
+          colorIndex: med.colorIndex,
+          color: RainbowColors.colors[med.colorIndex % RainbowColors.colors.length],
+          colorLabel: RainbowColors.labels[med.colorIndex % RainbowColors.labels.length],
+          status: status,
         ),
       );
-      ref.invalidate(todayStatusProvider(_today));
     }
+
+    final slots = <IntakeSlotData>[];
+    for (final entry in grouped.entries) {
+      final parts = entry.key.split(':');
+      slots.add(
+        IntakeSlotData(
+          hour: int.parse(parts[0]),
+          minute: int.parse(parts[1]),
+          items: entry.value,
+        ),
+      );
+    }
+
+    slots.sort((a, b) {
+      final aValue = a.hour * 60 + a.minute;
+      final bValue = b.hour * 60 + b.minute;
+      return aValue.compareTo(bValue);
+    });
+
+    return slots;
   }
 
-  Widget _buildProgressHeader(
-    List<Medication> medications,
-    int confirmed,
-    int total,
-    double progress,
-  ) {
+  Future<void> _toggleAllInSlot(IntakeSlotData slot, bool complete) async {
+    final targetStatus = complete ? DoseStatus.confirmed : DoseStatus.pending;
+    for (final item in slot.items) {
+      await DatabaseHelper.setDoseStatus(
+        medicationId: item.medicationId,
+        date: _today,
+        doseIndex: 0,
+        status: targetStatus,
+      );
+    }
+
+    if (complete && slot.items.isNotEmpty) {
+      NotificationService.speak('${slot.timeLabel} 的藥已全部完成');
+    }
+
+    ref.invalidate(todayStatusProvider(_today));
+  }
+
+  Future<void> _toggleSingleMedication(
+    IntakeSlotData slot,
+    SlotMedicationItem item,
+    bool complete,
+  ) async {
+    await DatabaseHelper.setDoseStatus(
+      medicationId: item.medicationId,
+      date: _today,
+      doseIndex: 0,
+      status: complete ? DoseStatus.confirmed : DoseStatus.pending,
+    );
+
+    if (complete) {
+      NotificationService.speak('${item.medicationName} 已吃');
+    }
+
+    ref.invalidate(todayStatusProvider(_today));
+  }
+
+  Widget _buildProgressHeader(int confirmed, int total, double progress) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             Text(
-              '👴 今天服藥進度',
+              '🐱 今天服藥進度',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -212,14 +248,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              progress == 1.0
-                  ? '🎉 今日全部完成！'
-                  : '$confirmed / $total 次已完成',
+              progress == 1.0 ? '🎉 今日全部完成！' : '$confirmed / $total 次已完成',
               style: TextStyle(
                 fontSize: 18,
-                color: progress == 1.0
-                    ? Colors.green.shade700
-                    : Colors.grey.shade700,
+                color: progress == 1.0 ? Colors.green.shade700 : Colors.grey.shade700,
                 fontWeight: FontWeight.w600,
               ),
             ),

@@ -1,244 +1,237 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../database/database_helper.dart';
-import '../models/medication.dart';
-import '../models/dose_record.dart';
-import '../theme/rainbow_colors.dart';
 
-class HistoryScreen extends ConsumerWidget {
+import '../database/database_helper.dart';
+import '../models/dose_record.dart';
+import '../models/medication.dart';
+
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('服藥歷史'),
-      ),
-      body: _HistoryBody(),
-    );
-  }
+  State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryBody extends ConsumerStatefulWidget {
-  @override
-  ConsumerState<_HistoryBody> createState() => _HistoryBodyState();
-}
-
-class _HistoryBodyState extends ConsumerState<_HistoryBody> {
-  DateTime _selectedDate = DateTime.now();
-  late String _dateStr;
-
-  @override
-  void initState() {
-    super.initState();
-    _dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-  }
+class _HistoryScreenState extends State<HistoryScreen> {
+  DateTime _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Date navigator
-        _buildDateNavigator(),
-        // History content
-        Expanded(child: _buildHistory()),
-      ],
-    );
-  }
+    final monthLabel = DateFormat('yyyy年 M月', 'zh_TW').format(_focusedMonth);
 
-  Widget _buildDateNavigator() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Scaffold(
+      appBar: AppBar(title: const Text('服藥歷史（月曆）')),
+      body: Column(
         children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left, size: 32),
-            onPressed: () {
-              setState(() {
-                _selectedDate = _selectedDate.subtract(const Duration(days: 1));
-                _dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-              });
-            },
-          ),
-          GestureDetector(
-            onTap: _pickDate,
-            child: Text(
-              DateFormat('M月d日 EEEE', 'zh_TW').format(_selectedDate),
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          _buildMonthHeader(monthLabel),
+          Expanded(
+            child: FutureBuilder<Map<DateTime, DayProgress>>(
+              future: _loadMonthProgress(_focusedMonth),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                return _buildCalendar(snapshot.data!);
+              },
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right, size: 32),
-            onPressed: _selectedDate.isBefore(DateTime.now())
-                ? () {
-                    setState(() {
-                      _selectedDate =
-                          _selectedDate.add(const Duration(days: 1));
-                      _dateStr =
-                          DateFormat('yyyy-MM-dd').format(_selectedDate);
-                    });
-                  }
-                : null,
           ),
         ],
       ),
     );
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 90)),
-      lastDate: DateTime.now(),
-      helpText: '選擇日期',
-      cancelText: '取消',
-      confirmText: '確認',
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-        _dateStr = DateFormat('yyyy-MM-dd').format(picked);
-      });
-    }
-  }
-
-  Widget _buildHistory() {
-    return FutureBuilder<List<Medication>>(
-      future: DatabaseHelper.getAllMedications(),
-      builder: (context, medSnapshot) {
-        if (!medSnapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final medications = medSnapshot.data!;
-        if (medications.isEmpty) {
-          return const Center(
-            child: Text('還沒有藥物記錄', style: TextStyle(fontSize: 18)),
-          );
-        }
-
-        return FutureBuilder<List<DoseRecord>>(
-          future: DatabaseHelper.getDoseRecordsForDate(_dateStr),
-          builder: (context, doseSnapshot) {
-            if (!doseSnapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final records = doseSnapshot.data!;
-            if (records.isEmpty && medications.isEmpty) {
-              return const Center(
-                child: Text('當天沒有記錄', style: TextStyle(fontSize: 18)),
-              );
-            }
-
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: medications.length,
-              itemBuilder: (context, i) {
-                final med = medications[i];
-                final record = records.where(
-                  (r) => r.medicationId == med.id,
-                );
-
-                final status = record.isNotEmpty
-                    ? record.first.status
-                    : DoseStatus.pending;
-                final confirmedAt = record.isNotEmpty
-                    ? record.first.confirmedAt
-                    : null;
-
-                return _buildHistoryCard(med, status, confirmedAt);
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildHistoryCard(
-      Medication med, DoseStatus status, DateTime? confirmedAt) {
-    final color =
-        RainbowColors.colors[med.colorIndex % RainbowColors.colors.length];
-    final timeLabel =
-        '${med.hour.toString().padLeft(2, '0')}:${med.minute.toString().padLeft(2, '0')}';
-
-    IconData icon;
-    String statusText;
-    Color statusColor;
-
-    switch (status) {
-      case DoseStatus.confirmed:
-        icon = Icons.check_circle;
-        statusText = '已吃';
-        statusColor = Colors.green;
-      case DoseStatus.missed:
-        icon = Icons.warning;
-        statusText = '漏服';
-        statusColor = Colors.red;
-      case DoseStatus.skipped:
-        icon = Icons.skip_next;
-        statusText = '跳過';
-        statusColor = Colors.orange;
-      case DoseStatus.pending:
-        icon = Icons.schedule;
-        statusText = '待處理';
-        statusColor = Colors.grey;
-    }
-
-    final isToday = _dateStr == DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-    return Card(
-      child: ListTile(
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.2),
-            shape: BoxShape.circle,
+  Widget _buildMonthHeader(String monthLabel) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () {
+              setState(() {
+                _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+              });
+            },
+            icon: const Icon(Icons.chevron_left),
           ),
-          child: Icon(icon, color: color, size: 28),
-        ),
-        title: Text(
-          '$timeLabel  ${med.name}',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        subtitle: med.dosage.isNotEmpty
-            ? Text(med.dosage, style: const TextStyle(fontSize: 16))
-            : null,
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: statusColor, size: 28),
-            const SizedBox(height: 2),
-            Text(
-              statusText,
-              style: TextStyle(
-                fontSize: 13,
-                color: statusColor,
-                fontWeight: FontWeight.bold,
+          Expanded(
+            child: Center(
+              child: Text(
+                monthLabel,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
-            if (isToday && status == DoseStatus.pending && _isPastTime(med))
-              Text(
-                '⚠️',
-                style: TextStyle(fontSize: 16, color: Colors.red.shade400),
-              ),
-          ],
-        ),
+          ),
+          IconButton(
+            onPressed: () {
+              setState(() {
+                _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
+              });
+            },
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
       ),
     );
   }
 
-  bool _isPastTime(Medication med) {
+  Widget _buildCalendar(Map<DateTime, DayProgress> progressMap) {
+    final year = _focusedMonth.year;
+    final month = _focusedMonth.month;
+    final daysInMonth = DateUtils.getDaysInMonth(year, month);
+    final firstWeekday = DateTime(year, month, 1).weekday % 7;
+
+    final cells = <Widget>[];
+
+    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+    for (final w in weekdays) {
+      cells.add(Center(
+        child: Text(
+          w,
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700),
+        ),
+      ));
+    }
+
+    for (int i = 0; i < firstWeekday; i++) {
+      cells.add(const SizedBox.shrink());
+    }
+
     final now = DateTime.now();
-    return med.hour < now.hour || (med.hour == now.hour && med.minute < now.minute);
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (int day = 1; day <= daysInMonth; day++) {
+      final date = DateTime(year, month, day);
+      final normalizedDate = DateTime(date.year, date.month, date.day);
+      final progress = progressMap[normalizedDate];
+      final isToday = normalizedDate == today;
+
+      cells.add(
+        Container(
+          margin: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isToday ? Colors.blue : Colors.grey.shade300,
+              width: isToday ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.white,
+          ),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$day',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  _buildDayMarker(progress),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: GridView.count(
+        crossAxisCount: 7,
+        childAspectRatio: 0.82,
+        children: cells,
+      ),
+    );
   }
+
+  Widget _buildDayMarker(DayProgress? progress) {
+    if (progress == null || progress.totalSlots == 0) {
+      return const SizedBox(height: 16);
+    }
+
+    if (progress.ratio == 1.0) {
+      return const Icon(Icons.check_circle, color: Colors.green, size: 18);
+    }
+
+    if (progress.ratio >= 0.8) {
+      return const Icon(Icons.check_circle, color: Colors.blue, size: 18);
+    }
+
+    return Container(
+      width: 12,
+      height: 12,
+      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+    );
+  }
+
+  Future<Map<DateTime, DayProgress>> _loadMonthProgress(DateTime monthStart) async {
+    final medications = await DatabaseHelper.getAllMedications();
+    final enabledMeds = medications.where((m) => m.isEnabled).toList();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final daysInMonth = DateUtils.getDaysInMonth(monthStart.year, monthStart.month);
+    final result = <DateTime, DayProgress>{};
+
+    for (int day = 1; day <= daysInMonth; day++) {
+      final date = DateTime(monthStart.year, monthStart.month, day);
+      final normalizedDate = DateTime(date.year, date.month, date.day);
+
+      // Future days stay blank on calendar.
+      if (normalizedDate.isAfter(today)) {
+        continue;
+      }
+
+      final nextDate = date.add(const Duration(days: 1));
+      final dateStr = DateFormat('yyyy-MM-dd').format(date);
+
+      final activeMeds = enabledMeds.where((m) => m.createdAt.isBefore(nextDate)).toList();
+      final slotGroups = _groupMedicationsByTime(activeMeds);
+
+      final totalSlots = slotGroups.length;
+      if (totalSlots == 0) {
+        result[normalizedDate] = const DayProgress(0, 0);
+        continue;
+      }
+
+      final records = await DatabaseHelper.getDoseRecordsForDate(dateStr);
+      final confirmedByMedId = <int, bool>{
+        for (final r in records) r.medicationId: r.status == DoseStatus.confirmed,
+      };
+
+      int completedSlots = 0;
+      for (final medIds in slotGroups.values) {
+        final allDone = medIds.every((id) => confirmedByMedId[id] == true);
+        if (allDone) completedSlots++;
+      }
+
+      result[normalizedDate] = DayProgress(completedSlots, totalSlots);
+    }
+
+    return result;
+  }
+
+  Map<String, List<int>> _groupMedicationsByTime(List<Medication> meds) {
+    final map = <String, List<int>>{};
+    for (final med in meds) {
+      final key = '${med.hour.toString().padLeft(2, '0')}:${med.minute.toString().padLeft(2, '0')}';
+      map.putIfAbsent(key, () => <int>[]);
+      map[key]!.add(med.id!);
+    }
+    return map;
+  }
+}
+
+class DayProgress {
+  final int completedSlots;
+  final int totalSlots;
+
+  const DayProgress(this.completedSlots, this.totalSlots);
+
+  double get ratio => totalSlots == 0 ? 0 : completedSlots / totalSlots;
 }

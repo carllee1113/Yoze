@@ -25,36 +25,49 @@ class ExtractionLogic {
   ) {
     final hasBlocks = blocks.isNotEmpty;
     final medications = <ExtractedMedication>[];
+    final text = _normalizeOcrText(fullText);
 
-    final hkParsed = _parseHKLabelFormat(fullText);
+    final hkParsed = _parseHKLabelFormat(text);
     if (hkParsed != null && hkParsed.drugName.isNotEmpty) {
       medications.add(hkParsed);
       return medications;
     }
 
-    final drugNameFound = _findDrugNameInText(fullText);
+    final drugNameFound = _findDrugNameInText(text);
     if (drugNameFound != null) {
       medications.add(drugNameFound);
       return medications;
     }
 
-    final permitContext = _extractByPermitNumber(fullText);
+    final permitContext = _extractByPermitNumber(text);
     if (permitContext != null) {
       medications.add(permitContext);
       return medications;
     }
 
-    final englishDrug = _findEnglishDrugName(fullText);
+    final englishDrug = _findEnglishDrugName(text);
     if (englishDrug != null) {
       medications.add(englishDrug);
       return medications;
     }
 
-    if (hasBlocks && fullText.trim().isEmpty) {
+    if (hasBlocks && text.trim().isEmpty) {
       return medications;
     }
 
     return medications;
+  }
+
+  static String _normalizeOcrText(String text) {
+    return text
+        .replaceAllMapped(
+          RegExp(r'(?<=\d)O(?=\s*(?:MG|G|ML|MCG)\b)', caseSensitive: false),
+          (_) => '0',
+        )
+        .replaceAllMapped(
+          RegExp(r'(?<=\d)O(?=\d)', caseSensitive: false),
+          (_) => '0',
+        );
   }
 
   static ExtractedMedication? _findDrugNameInText(String text) {
@@ -285,6 +298,7 @@ class ExtractionLogic {
       RegExp(r'tid', caseSensitive: false),
       RegExp(r'bid', caseSensitive: false),
       RegExp(r'qd', caseSensitive: false),
+      RegExp(r'\b(one|once|two|twice|three|four)\s+times?\b', caseSensitive: false),
     ];
 
     final chineseNumbers = {
@@ -314,6 +328,10 @@ class ExtractionLogic {
         if (matched.contains('tid') || matched.contains('三次')) return 3;
         if (matched.contains('bid') || matched.contains('兩次')) return 2;
         if (matched.contains('qd') || matched.contains('一次')) return 1;
+        if (matched.contains('four')) return 4;
+        if (matched.contains('three')) return 3;
+        if (matched.contains('twice') || matched.contains('two')) return 2;
+        if (matched.contains('once') || matched.contains('one')) return 1;
       }
     }
     return 1;
@@ -361,6 +379,21 @@ class ExtractionLogic {
     }
 
     if (drugName == null) {
+      final drugColonPattern = RegExp(
+        r'(?:OTC\s+)?(?:藥名\s*)?Drug:\s*([A-Za-z][A-Za-z\s\-]*?)(?:\s+\([^)]+\))?\s+(\d+\.?\d*)\s*(mg|g|ml|mcg)\s+(TABLET|TABLETS|CAPSULE|CAPSULES|CAP|TAB|LOZENGE|LOZENGES|SYRUP|CREAM|SOLUTION|DROP|DROPS)\s*(HK[-\s]?\d{5})?',
+        caseSensitive: false,
+      );
+      final drugColonMatch = drugColonPattern.firstMatch(text);
+      if (drugColonMatch != null) {
+        drugName = drugColonMatch.group(1)?.trim().toUpperCase();
+        dosagePerUnit =
+            '${drugColonMatch.group(2)}${drugColonMatch.group(3)}'.toUpperCase();
+        form = _normalizeFormName(drugColonMatch.group(4) ?? '');
+        permitNo = _normalizePermitNo(drugColonMatch.group(5));
+      }
+    }
+
+    if (drugName == null) {
       final labeledPattern = RegExp(
         r'藥名\s*Drug:\s*([A-Za-z][A-Za-z\-]*?)(?:\s+\([^)]+\))?\s+(\d+\.?\d*)\s*(mg|g|ml|mcg)\s+([A-Za-z]+)\s*(HK-\d{5})?',
         caseSensitive: false,
@@ -368,11 +401,10 @@ class ExtractionLogic {
       final labeledMatch = labeledPattern.firstMatch(text);
       if (labeledMatch != null) {
         drugName = labeledMatch.group(1)?.toUpperCase();
-        form = labeledMatch.group(4)?.toUpperCase() ?? '';
-        if (form == 'LOZENGES') form = 'LOZENGE';
+        form = _normalizeFormName(labeledMatch.group(4) ?? '');
         dosagePerUnit =
             '${labeledMatch.group(2)}${labeledMatch.group(3)}'.toUpperCase();
-        permitNo = labeledMatch.group(5);
+        permitNo = _normalizePermitNo(labeledMatch.group(5));
       }
     }
 
@@ -435,13 +467,14 @@ class ExtractionLogic {
     }
 
     if (!freqFound) {
-      if (text.toLowerCase().contains('qid') || text.contains('四次')) {
+      final lowerText = text.toLowerCase();
+      if (lowerText.contains('qid') || text.contains('四次') || lowerText.contains('four times')) {
         frequency = 4;
-      } else if (text.toLowerCase().contains('tid') || text.contains('三次')) {
+      } else if (lowerText.contains('tid') || text.contains('三次') || lowerText.contains('three times')) {
         frequency = 3;
-      } else if (text.toLowerCase().contains('bid') || text.contains('兩次')) {
+      } else if (lowerText.contains('bid') || text.contains('兩次') || lowerText.contains('twice') || lowerText.contains('two times')) {
         frequency = 2;
-      } else if (text.toLowerCase().contains('qd') || text.contains('一次')) {
+      } else if (lowerText.contains('qd') || text.contains('一次') || lowerText.contains('once') || lowerText.contains('one time')) {
         frequency = 1;
       } else if (
         RegExp(r'\b2\s*times?\b', caseSensitive: false).hasMatch(text)
@@ -458,10 +491,12 @@ class ExtractionLogic {
     final doseMatch = dosePattern.firstMatch(text);
     if (doseMatch != null) {
       dosePerTime = doseMatch.group(0);
+    } else {
+      dosePerTime = _extractDosePerTime(text);
     }
 
     final totalPattern = RegExp(
-      r'(\d+)\s*(TAB|TABLET|CAP|LOZENGE|粒|顆|片)',
+      r'(\d+)\s*(TAB|TABLET|TABLETS|CAP|CAPSULE|CAPSULES|LOZENGE|LOZENGES|粒|顆|片)',
       caseSensitive: false,
     );
     final totalMatch = totalPattern.firstMatch(text);
@@ -563,7 +598,22 @@ class ExtractionLogic {
       caseSensitive: false,
     );
     final engMatch = englishPattern.firstMatch(text);
-    return engMatch != null ? engMatch.group(0)! : '';
+    if (engMatch != null) return engMatch.group(0)!;
+
+    final englishWordPattern = RegExp(
+      r'\b(one|two|three|four)\s+(tablet|capsule|pill|pack|lozenge)s?',
+      caseSensitive: false,
+    );
+    final wordMatch = englishWordPattern.firstMatch(text);
+    if (wordMatch == null) return '';
+    final amount = switch (wordMatch.group(1)!.toLowerCase()) {
+      'one' => '1',
+      'two' => '2',
+      'three' => '3',
+      'four' => '4',
+      _ => '',
+    };
+    return amount.isEmpty ? '' : '$amount ${wordMatch.group(2)}';
   }
 
   static int? _extractDuration(String text) {
@@ -581,9 +631,35 @@ class ExtractionLogic {
     final chMatch = chinesePattern.firstMatch(text);
     if (chMatch != null) return int.tryParse(chMatch.group(1)!);
 
-    final tabPattern = RegExp(r'(\d+)\s*(TAB|CAP|PILL)', caseSensitive: false);
+    final quantityPattern = RegExp(
+      r'(?:Quantity|Ouantity|eOuantity)[：:]?\s*(\d+)',
+      caseSensitive: false,
+    );
+    final quantityMatch = quantityPattern.firstMatch(text);
+    if (quantityMatch != null) return int.tryParse(quantityMatch.group(1)!);
+
+    final tabPattern = RegExp(
+      r'(\d+)\s*(TAB|TABLET|TABLETS|CAP|CAPSULE|CAPSULES|PILL|LOZENGE|LOZENGES)',
+      caseSensitive: false,
+    );
     final tabMatch = tabPattern.firstMatch(text);
     return tabMatch != null ? int.tryParse(tabMatch.group(1)!) : null;
+  }
+
+  static String _normalizeFormName(String value) {
+    final upper = value.trim().toUpperCase();
+    if (upper == 'TAB' || upper == 'TABLETS') return 'TABLET';
+    if (upper == 'CAP' || upper == 'CAPSULES') return 'CAPSULE';
+    if (upper == 'LOZENGES') return 'LOZENGE';
+    if (upper == 'DROPS') return 'DROP';
+    return upper;
+  }
+
+  static String? _normalizePermitNo(String? value) {
+    if (value == null) return null;
+    final match = RegExp(r'HK[-\s]?(\d{5})', caseSensitive: false).firstMatch(value);
+    final digits = match?.group(1);
+    return digits == null ? null : 'HK-$digits';
   }
 
   static String _extractSchedule(String text) {

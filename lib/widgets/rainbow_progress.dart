@@ -1,12 +1,61 @@
 import 'package:flutter/material.dart';
-import '../theme/rainbow_colors.dart';
+
 import '../models/dose_record.dart';
 
-class RainbowProgress extends StatelessWidget {
-  final List<SlotData> slots;
-  final void Function(SlotData slot)? onTap;
+class SlotMedicationItem {
+  final int medicationId;
+  final String medicationName;
+  final String dosage;
+  final int colorIndex;
+  final Color color;
+  final String colorLabel;
+  final DoseStatus status;
 
-  const RainbowProgress({super.key, required this.slots, this.onTap});
+  const SlotMedicationItem({
+    required this.medicationId,
+    required this.medicationName,
+    required this.dosage,
+    required this.colorIndex,
+    required this.color,
+    required this.colorLabel,
+    required this.status,
+  });
+
+  bool get isDone => status == DoseStatus.confirmed;
+}
+
+class IntakeSlotData {
+  final int hour;
+  final int minute;
+  final List<SlotMedicationItem> items;
+
+  const IntakeSlotData({
+    required this.hour,
+    required this.minute,
+    required this.items,
+  });
+
+  String get timeLabel =>
+      '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+
+  bool get isComplete => items.isNotEmpty && items.every((i) => i.isDone);
+}
+
+class RainbowProgress extends StatelessWidget {
+  final List<IntakeSlotData> slots;
+  final Future<void> Function(IntakeSlotData slot, bool complete)? onToggleAll;
+  final Future<void> Function(
+    IntakeSlotData slot,
+    SlotMedicationItem item,
+    bool complete,
+  )? onToggleItem;
+
+  const RainbowProgress({
+    super.key,
+    required this.slots,
+    this.onToggleAll,
+    this.onToggleItem,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -28,216 +77,119 @@ class RainbowProgress extends StatelessWidget {
     }
 
     return Column(
-      children: slots.map((slot) => GestureDetector(
-        onTap: onTap != null ? () => onTap!(slot) : null,
-        child: _buildSlotCard(context, slot),
-      )).toList(),
+      children: slots.map((slot) => _buildIntakeCard(context, slot)).toList(),
     );
   }
 
-  Widget _buildSlotCard(BuildContext context, SlotData slot) {
-    final bgColor = switch (slot.status) {
-      DoseStatus.confirmed => slot.color.withValues(alpha: 0.2),
-      DoseStatus.missed => Colors.red.shade50,
-      _ => Colors.grey.shade50,
-    };
-
-    final borderColor = switch (slot.status) {
-      DoseStatus.confirmed => slot.color,
-      DoseStatus.missed => RainbowColors.missed,
-      DoseStatus.pending => slot.color.withValues(alpha: 0.3),
-      _ => Colors.grey.shade200,
-    };
-
-    final icon = switch (slot.status) {
-      DoseStatus.confirmed => Icons.check_circle,
-      DoseStatus.missed => Icons.warning_amber_rounded,
-      _ => Icons.access_time,
-    };
-
-    final statusText = switch (slot.status) {
-      DoseStatus.confirmed => '已完成',
-      DoseStatus.missed => '漏服',
-      DoseStatus.pending => slot.isActive ? '現在可以吃了！' : '等待中',
-      DoseStatus.skipped => '已跳過',
-    };
-
-    final statusColor = switch (slot.status) {
-      DoseStatus.confirmed => Colors.green.shade700,
-      DoseStatus.missed => RainbowColors.missed,
-      DoseStatus.pending => slot.isActive ? slot.color : Colors.grey,
-      DoseStatus.skipped => Colors.grey,
-    };
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 500),
+  Widget _buildIntakeCard(BuildContext context, IntakeSlotData slot) {
+    final allDone = slot.isComplete;
+    return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: 2),
+        side: BorderSide(
+          color: allDone ? Colors.green.shade400 : Colors.grey.shade300,
+          width: 2,
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Color indicator
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: slot.status == DoseStatus.confirmed
-                    ? slot.color
-                    : slot.color.withValues(alpha: 0.3),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Icon(icon, color: Colors.white, size: 24),
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Time and medication info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        slot.timeLabel,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: slot.status == DoseStatus.confirmed
-                              ? Colors.black87
-                              : Colors.black54,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: slot.color.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          slot.colorLabel,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: slot.color,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    slot.medicationName,
-                    style: const TextStyle(fontSize: 18),
-                  ),
-                  if (slot.dosage.isNotEmpty)
-                    Text(
-                      slot.dosage,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            // Status badge
-            Column(
+            Row(
               children: [
-                Icon(icon, color: statusColor, size: 28),
-                const SizedBox(height: 4),
+                const Icon(Icons.schedule),
+                const SizedBox(width: 8),
                 Text(
-                  statusText,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: statusColor,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  slot.timeLabel,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                const Text('全部', style: TextStyle(fontWeight: FontWeight.w600)),
+                Checkbox(
+                  value: allDone,
+                  onChanged: onToggleAll == null
+                      ? null
+                      : (v) {
+                          if (v == null) return;
+                          onToggleAll!(slot, v);
+                        },
                 ),
               ],
             ),
+            const SizedBox(height: 6),
+            ...slot.items.map((item) => _buildMedicationCard(slot, item)),
           ],
         ),
       ),
     );
   }
-}
 
-class SlotData {
-  final int medicationId;
-  final String medicationName;
-  final String dosage;
-  final int colorIndex;
-  final Color color;
-  final String colorLabel;
-  final String timeLabel;
-  final DoseStatus status;
-  final bool isActive;
-
-  SlotData({
-    required this.medicationId,
-    required this.medicationName,
-    required this.dosage,
-    required this.colorIndex,
-    required this.color,
-    required this.colorLabel,
-    required this.timeLabel,
-    required this.status,
-    this.isActive = false,
-  });
-
-  static List<SlotData> fromDoseData(
-    List<DoseDatum> data,
-    int currentHour,
-    int currentMinute,
-  ) {
-    return data.map((d) {
-      final color = RainbowColors.colors[d.colorIndex % RainbowColors.colors.length];
-      final label = RainbowColors.fullLabels[d.colorIndex % RainbowColors.colors.length];
-      final timeLabel =
-          '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-      final isActive = d.status == DoseStatus.pending &&
-          (d.hour < currentHour ||
-              (d.hour == currentHour && d.minute <= currentMinute + 30));
-
-      return SlotData(
-        medicationId: d.medicationId,
-        medicationName: d.medicationName,
-        dosage: d.dosage,
-        colorIndex: d.colorIndex,
-        color: color,
-        colorLabel: label,
-        timeLabel: timeLabel,
-        status: d.status,
-        isActive: isActive,
-      );
-    }).toList();
+  Widget _buildMedicationCard(IntakeSlotData slot, SlotMedicationItem item) {
+    final done = item.isDone;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: done ? Colors.green.shade50 : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: done ? Colors.green.shade300 : item.color.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: item.color, shape: BoxShape.circle),
+            child: Center(
+              child: Text(
+                item.colorLabel,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.medicationName,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                if (item.dosage.isNotEmpty)
+                  Text(
+                    item.dosage,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                  ),
+              ],
+            ),
+          ),
+          Text(
+            done ? '完成' : '等待中',
+            style: TextStyle(
+              color: done ? Colors.green.shade700 : Colors.orange.shade700,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Checkbox(
+            value: done,
+            onChanged: onToggleItem == null
+                ? null
+                : (v) {
+                    if (v == null) return;
+                    onToggleItem!(slot, item, v);
+                  },
+          ),
+        ],
+      ),
+    );
   }
-}
-
-class DoseDatum {
-  final int medicationId;
-  final String medicationName;
-  final String dosage;
-  final int colorIndex;
-  final int hour;
-  final int minute;
-  final DoseStatus status;
-
-  DoseDatum({
-    required this.medicationId,
-    required this.medicationName,
-    required this.dosage,
-    required this.colorIndex,
-    required this.hour,
-    required this.minute,
-    required this.status,
-  });
 }

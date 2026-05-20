@@ -2,18 +2,28 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/photo_scan_provider.dart';
+import '../models/extracted_medication.dart';
+import 'photo_capture_screen.dart';
 import 'verification_screen.dart';
 
 class ProcessingScreen extends ConsumerStatefulWidget {
   final String imagePath;
+  final bool returnExtractedMedications;
 
-  const ProcessingScreen({super.key, required this.imagePath});
+  const ProcessingScreen({
+    super.key,
+    required this.imagePath,
+    this.returnExtractedMedications = false,
+  });
 
   @override
   ConsumerState<ProcessingScreen> createState() => _ProcessingScreenState();
 }
 
 class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
+  bool _showingNoResultDialog = false;
+  bool _didComplete = false;
+
   @override
   void initState() {
     super.initState();
@@ -27,13 +37,25 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
     final scanState = ref.watch(photoScanProvider);
 
     ref.listen<PhotoScanState>(photoScanProvider, (previous, next) {
+      if (_didComplete) return;
       if (next.state == ScanState.verified) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => VerificationScreen(imagePath: widget.imagePath),
-          ),
-        );
+        if (widget.returnExtractedMedications) {
+          if (next.extractedMedications.isEmpty) {
+            _showNoResultDialog();
+            return;
+          }
+          _didComplete = true;
+          Navigator.of(context).pop(next.extractedMedications);
+        } else {
+          _didComplete = true;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => VerificationScreen(imagePath: widget.imagePath),
+            ),
+          );
+        }
       } else if (next.state == ScanState.error) {
+        _didComplete = true;
         _showError(next.errorMessage ?? '識別失敗');
       }
     });
@@ -119,7 +141,23 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              Navigator.of(context).pop();
+              ref.read(photoScanProvider.notifier).reset();
+              _didComplete = true;
+              if (widget.returnExtractedMedications) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const PhotoCaptureScreen(
+                      returnExtractedMedications: true,
+                    ),
+                  ),
+                );
+              } else {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const PhotoCaptureScreen(),
+                  ),
+                );
+              }
             },
             child: const Text('返回重拍'),
           ),
@@ -127,11 +165,76 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
             onPressed: () {
               Navigator.of(context).pop();
               ref.read(photoScanProvider.notifier).reset();
+              _didComplete = true;
+              if (widget.returnExtractedMedications) {
+                Navigator.of(context).pop([_manualMedication()]);
+              } else {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const VerificationScreen(),
+                  ),
+                );
+              }
             },
             child: const Text('手動輸入'),
           ),
         ],
       ),
+    );
+  }
+
+  void _showNoResultDialog() {
+    if (_showingNoResultDialog || !mounted) return;
+    _showingNoResultDialog = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('未識別到藥物資料'),
+        content: const Text('可選擇重拍，或返回批量設定頁手動新增藥物。'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _showingNoResultDialog = false;
+              ref.read(photoScanProvider.notifier).reset();
+              _didComplete = true;
+              Navigator.of(context).pop([_manualMedication()]);
+            },
+            child: const Text('返回手動新增'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _showingNoResultDialog = false;
+              ref.read(photoScanProvider.notifier).reset();
+              _didComplete = true;
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => const PhotoCaptureScreen(
+                    returnExtractedMedications: true,
+                  ),
+                ),
+              );
+            },
+            child: const Text('重拍'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  ExtractedMedication _manualMedication() {
+    return ExtractedMedication(
+      drugName: '',
+      form: '藥丸',
+      administration: '飯後',
+      dosePerTime: '4',
+      frequency: 1,
+      colorIndex: 0,
+      rawText: '',
+      confidence: 0.05,
     );
   }
 }
