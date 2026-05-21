@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "581265524161",
+    "project_id": "yozewong",
+    "storage_bucket": "yozewong.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:581265524161:android:f8fe5cdc73d10ab420db40",
+        "android_client_info": {
+          "package_name": "com.yoze.yoze"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJkOEzGrZjCUyzNw2HLR61kUxh8DeIVY0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

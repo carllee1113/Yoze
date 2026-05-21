@@ -48,3 +48,6 @@ app.*.map.json
 /platform-tools/
 /platform-tools.zip
 /bugreport-*.zip
+
+# Local release packages for direct sharing
+/dist/

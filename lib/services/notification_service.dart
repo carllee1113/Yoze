@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +14,9 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   static final FlutterTts _tts = FlutterTts();
+  static const MethodChannel _nativeChannel = MethodChannel(
+    'com.yoze.yoze/native',
+  );
   static bool _initialized = false;
 
   static Future<void> init() async {
@@ -126,17 +130,19 @@ class NotificationService {
       sound: 'default',
     );
 
-    await _plugin.zonedSchedule(
-      medicationId,
-      '🔴 該吃藥了！',
-      body,
-      tz.TZDateTime.from(scheduledDate, tz.local),
-      NotificationDetails(android: androidDetails, iOS: iosDetails),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: 'medication_$medicationId',
+    await _runWithAndroidCacheRecovery(
+      () => _plugin.zonedSchedule(
+        medicationId,
+        '🔴 該吃藥了！',
+        body,
+        tz.TZDateTime.from(scheduledDate, tz.local),
+        NotificationDetails(android: androidDetails, iOS: iosDetails),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'medication_$medicationId',
+      ),
     );
   }
 
@@ -214,25 +220,58 @@ class NotificationService {
       ),
     );
 
-    await _plugin.zonedSchedule(
-      snoozeId,
-      '⏰ 10 分鐘後提醒',
-      '請記得按時服藥',
-      when,
-      details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: 'medication_$medicationId',
+    await _runWithAndroidCacheRecovery(
+      () => _plugin.zonedSchedule(
+        snoozeId,
+        '⏰ 10 分鐘後提醒',
+        '請記得按時服藥',
+        when,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'medication_$medicationId',
+      ),
     );
   }
 
   static Future<void> cancelReminder(int medicationId) async {
-    await _plugin.cancel(medicationId);
+    await _runWithAndroidCacheRecovery(() => _plugin.cancel(medicationId));
   }
 
   static Future<void> cancelAll() async {
-    await _plugin.cancelAll();
+    await _runWithAndroidCacheRecovery(_plugin.cancelAll);
+  }
+
+  static Future<void> _runWithAndroidCacheRecovery(
+    Future<void> Function() operation,
+  ) async {
+    try {
+      await operation();
+    } on PlatformException catch (error) {
+      if (!_isScheduledNotificationCacheError(error)) {
+        rethrow;
+      }
+
+      await _clearScheduledNotificationCache();
+      await operation();
+    }
+  }
+
+  static bool _isScheduledNotificationCacheError(PlatformException error) {
+    final message = '${error.message} ${error.details}';
+    return error.code == 'error' && message.contains('Missing type parameter');
+  }
+
+  static Future<void> _clearScheduledNotificationCache() async {
+    try {
+      await _nativeChannel.invokeMethod<void>(
+        'clearScheduledNotificationCache',
+      );
+    } catch (_) {
+      // If cache cleanup is unavailable, retrying the original operation will
+      // surface the real notification error to the caller.
+    }
   }
 
   static Future<void> speak(String text) async {
